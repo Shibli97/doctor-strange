@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Doctor Strange — Therapeutic Voice Assistant</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0d0f14;--surface:#13161e;--border:#1e2330;
+  --accent:#7c6af7;--accent2:#a78bfa;--glow:rgba(124,106,247,.35);
+  --text:#e8e6f0;--muted:#7a7890;
+  --user-bg:#1a1d2a;--ai-bg:#141720;
+  --danger:#f87171;--ok:#34d399;--radius:14px;
+  --font:'Segoe UI',system-ui,-apple-system,sans-serif
+}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--font)}
+.hidden{display:none!important}
+.app{width:100%;max-width:740px;margin:0 auto;display:flex;flex-direction:column;min-height:100vh;border-left:1px solid var(--border);border-right:1px solid var(--border)}
+
+/* ── Header ── */
+.header{display:flex;align-items:center;justify-content:space-between;padding:18px 24px;border-bottom:1px solid var(--border);background:var(--surface);position:sticky;top:0;z-index:10}
+.header-inner{display:flex;align-items:center;gap:14px}
+.logo{font-size:1.6rem;color:var(--accent2);filter:drop-shadow(0 0 8px var(--glow))}
+.header h1{font-size:1.15rem;font-weight:600;letter-spacing:.3px}
+.subtitle{font-size:.75rem;color:var(--muted);margin-top:2px;letter-spacing:.4px}
+.header-btns{display:flex;gap:8px;align-items:center}
+.btn-log{background:transparent;border:1px solid var(--border);color:var(--muted);padding:6px 12px;border-radius:8px;font-size:.75rem;cursor:pointer;transition:all .2s}
+.btn-log:hover{border-color:var(--accent);color:var(--accent2)}
+.btn-end{background:transparent;border:1px solid #3a2f2f;color:var(--danger);padding:7px 16px;border-radius:8px;font-size:.8rem;cursor:pointer;transition:background .2s,border-color .2s}
+.btn-end:hover{background:rgba(248,113,113,.08);border-color:var(--danger)}
+
+/* ── Orb ── */
+.orb-section{display:flex;flex-direction:column;align-items:center;padding:48px 24px 32px;gap:20px;background:radial-gradient(ellipse at 50% 0%,rgba(124,106,247,.06) 0%,transparent 70%)}
+.orb-wrapper{position:relative;width:140px;height:140px;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.ring{position:absolute;border-radius:50%;border:1px solid rgba(124,106,247,.18);animation:ringPulse 3s ease-in-out infinite;pointer-events:none}
+.ring-1{width:140px;height:140px;animation-delay:0s}
+.ring-2{width:170px;height:170px;animation-delay:.4s;border-color:rgba(124,106,247,.10)}
+.ring-3{width:200px;height:200px;animation-delay:.8s;border-color:rgba(124,106,247,.05)}
+@keyframes ringPulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.04);opacity:.6}}
+.orb{width:100px;height:100px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#9b8bff,#5b4ce0 60%,#3a2fa8);box-shadow:0 0 30px var(--glow),0 0 60px rgba(124,106,247,.15),inset 0 1px 0 rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;transition:transform .15s,box-shadow .2s;position:relative;z-index:1}
+.orb:hover{transform:scale(1.06)}
+.orb:active{transform:scale(.97)}
+.mic-icon,.stop-icon{width:36px;height:36px;color:#fff;filter:drop-shadow(0 1px 3px rgba(0,0,0,.4))}
+.orb-wrapper.listening .orb{background:radial-gradient(circle at 35% 35%,#f97316,#dc2626 60%,#991b1b);box-shadow:0 0 40px rgba(220,38,38,.5),0 0 80px rgba(220,38,38,.2),inset 0 1px 0 rgba(255,255,255,.15);animation:orbPulse 1s ease-in-out infinite}
+.orb-wrapper.listening .ring{border-color:rgba(220,38,38,.25)}
+.orb-wrapper.listening .ring-2{border-color:rgba(220,38,38,.12)}
+.orb-wrapper.thinking .orb{background:radial-gradient(circle at 35% 35%,#818cf8,#4f46e5 60%,#312e81);animation:orbSpin 2s linear infinite}
+.orb-wrapper.speaking .orb{background:radial-gradient(circle at 35% 35%,#34d399,#059669 60%,#065f46);box-shadow:0 0 40px rgba(5,150,105,.5),0 0 80px rgba(5,150,105,.2),inset 0 1px 0 rgba(255,255,255,.15);animation:orbPulse .8s ease-in-out infinite}
+.orb-wrapper.speaking .ring{border-color:rgba(5,150,105,.25)}
+@keyframes orbPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}
+@keyframes orbSpin{from{filter:hue-rotate(0deg)}to{filter:hue-rotate(360deg)}}
+
+/* status + interim preview */
+.status-text{font-size:.85rem;color:var(--muted);letter-spacing:.5px;text-align:center;min-height:1.2em;transition:color .3s}
+.orb-wrapper.listening~.status-text{color:#f87171}
+.orb-wrapper.thinking~.status-text{color:var(--accent2)}
+.orb-wrapper.speaking~.status-text{color:#34d399}
+.interim-preview{font-size:.8rem;color:rgba(232,230,240,.45);font-style:italic;text-align:center;min-height:1.1em;max-width:460px;padding:0 12px;line-height:1.4;transition:opacity .2s;word-break:break-word}
+
+/* ── Transcript ── */
+.transcript-section{flex:1;overflow-y:auto;padding:16px 20px;display:flex;flex-direction:column;gap:4px;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
+.message{display:flex;flex-direction:column;gap:4px;padding:14px 16px;border-radius:var(--radius);max-width:90%;animation:fadeUp .3s ease}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.message.user{align-self:flex-end;background:var(--user-bg);border:1px solid var(--border)}
+.message.assistant{align-self:flex-start;background:var(--ai-bg);border:1px solid rgba(124,106,247,.15)}
+.speaker{font-size:.7rem;font-weight:600;letter-spacing:.6px;text-transform:uppercase;color:var(--muted)}
+.message.assistant .speaker{color:var(--accent2)}
+.message p{font-size:.93rem;line-height:1.65}
+.typing-indicator{display:flex;gap:5px;align-items:center;padding:4px 0}
+.typing-indicator span{width:7px;height:7px;border-radius:50%;background:var(--accent);animation:typingBounce 1.2s ease-in-out infinite}
+.typing-indicator span:nth-child(2){animation-delay:.2s}
+.typing-indicator span:nth-child(3){animation-delay:.4s}
+@keyframes typingBounce{0%,80%,100%{transform:translateY(0);opacity:.5}40%{transform:translateY(-6px);opacity:1}}
+
+/* ── Text input ── */
+.text-input-row{display:flex;gap:8px;padding:12px 20px 16px;border-top:1px solid var(--border);background:var(--surface)}
+#textInput{flex:1;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px 14px;color:var(--text);font-size:.9rem;font-family:var(--font);outline:none;transition:border-color .2s}
+#textInput::placeholder{color:var(--muted)}
+#textInput:focus{border-color:var(--accent)}
+.btn-send{background:var(--accent);border:none;color:#fff;padding:10px 20px;border-radius:10px;font-size:.88rem;font-weight:600;cursor:pointer;transition:background .2s,transform .1s}
+.btn-send:hover{background:var(--accent2)}
+.btn-send:active{transform:scale(.97)}
+
+/* ── Log Panel ── */
+.log-panel{border-top:1px solid var(--border);background:#0a0c10;font-family:'Consolas','Courier New',monospace}
+.log-header{display:flex;align-items:center;justify-content:space-between;padding:8px 16px;cursor:pointer;user-select:none;border-bottom:1px solid var(--border)}
+.log-header span{font-size:.72rem;color:var(--muted);letter-spacing:.5px;text-transform:uppercase}
+.log-header-right{display:flex;gap:8px;align-items:center}
+.log-badge{background:rgba(124,106,247,.15);color:var(--accent2);border-radius:10px;padding:1px 7px;font-size:.68rem}
+.btn-dl{background:transparent;border:1px solid var(--border);color:var(--muted);padding:3px 10px;border-radius:6px;font-size:.7rem;cursor:pointer;transition:all .2s}
+.btn-dl:hover{border-color:var(--accent);color:var(--accent2)}
+.log-body{max-height:180px;overflow-y:auto;padding:8px 14px;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
+.log-body.collapsed{display:none}
+.log-line{font-size:.72rem;line-height:1.7;color:#4a5568;display:flex;gap:8px}
+.log-line .ts{color:#2d3748;flex-shrink:0}
+.log-line.info .msg{color:#68d391}
+.log-line.warn .msg{color:#f6ad55}
+.log-line.error .msg{color:#fc8181}
+.log-line.sr .msg{color:#76e4f7}
+.log-line.submit .msg{color:var(--accent2);font-weight:600}
+
+/* ── Error banner ── */
+.err-banner{margin:8px 20px;padding:10px 14px;background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.3);border-radius:10px;font-size:.82rem;color:var(--danger);line-height:1.5}
+
+@media(max-width:500px){
+  .orb{width:86px;height:86px}
+  .orb-section{padding:36px 16px 24px}
+  .header{padding:14px 16px}
+  .message{max-width:100%}
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- Header -->
+  <header class="header">
+    <div class="header-inner">
+      <div class="logo">✦</div>
+      <div>
+        <h1>Doctor Strange</h1>
+        <p class="subtitle">Therapeutic Voice Assistant</p>
+      </div>
+    </div>
+    <div class="header-btns">
+      <button class="btn-log" id="btnToggleLog">Logs</button>
+      <button class="btn-end" id="btnEnd">End Session</button>
+    </div>
+  </header>
+
+  <!-- Orb -->
+  <section class="orb-section">
+    <div class="orb-wrapper" id="orbWrapper">
+      <div class="ring ring-3"></div>
+      <div class="ring ring-2"></div>
+      <div class="ring ring-1"></div>
+      <div class="orb">
+        <svg class="mic-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+          <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+          <line x1="12" y1="19" x2="12" y2="23"/>
+          <line x1="8" y1="23" x2="16" y2="23"/>
+        </svg>
+        <svg class="stop-icon hidden" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+          <rect x="4" y="4" width="16" height="16" rx="2"/>
+        </svg>
+      </div>
+    </div>
+    <p class="status-text" id="statusText">Tap the orb to speak</p>
+    <p class="interim-preview" id="interimPreview"></p>
+  </section>
+
+  <!-- Transcript -->
+  <section class="transcript-section" id="transcript">
+    <div class="message assistant">
+      <span class="speaker">Doctor Strange</span>
+      <p>Hey... I'm really glad you're here. Take a breath, get comfortable. There's no rush. Just notice how you're feeling right now — not how you think you should feel, just what's actually there. When you're ready... what's been on your mind?</p>
+    </div>
+  </section>
+
+  <!-- Text input -->
+  <div class="text-input-row">
+    <input type="text" id="textInput" placeholder="Or type your message here…" autocomplete="off"/>
+    <button class="btn-send" id="btnSend">Send</button>
+  </div>
+
+  <!-- Log Panel -->
+  <div class="log-panel" id="logPanel">
+    <div class="log-header" id="logHeader">
+      <span>Speech Recognition Logs</span>
+      <div class="log-header-right">
+        <span class="log-badge" id="logCount">0 events</span>
+        <button class="btn-dl" id="btnDownloadLog">Download</button>
+      </div>
+    </div>
+    <div class="log-body collapsed" id="logBody"></div>
+  </div>
+
+</div>
+
+<script>
+(function() {
+
+  // ── Config ──
+  var GROQ_API_KEY = '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';
+  var MODEL        = 'llama-3.3-70b-versatile';
+  var GROQ_URL     = 'https://api.groq.com/openai/v1/chat/completions';
+  var SILENCE_MS   = 1800; // submit after 1.8s of silence
+
+  var SYSTEM_PROMPT = 'You are Doctor Strange — a warm, human-sounding professional therapeutic assistant trained in CBT, ACT, Psychodynamic Therapy, and Motivational Interviewing. You draw from "The Body Keeps the Score", "Man\'s Search for Meaning", "Feeling Good", "The Gifts of Imperfection", "Boundaries", "Maybe You Should Talk to Someone", "The Untethered Soul", and "Lost Connections".\n\nYou are NOT a yes-man. You are thoughtful, boundaried, and real. Your role is to help the person gain clarity — not just feel good in the moment.\n\nYou WILL: Reflect with empathy. Ask Socratic questions. Gently challenge distortions. Name patterns. Validate emotions while distinguishing them from facts. Offer psychoeducation when helpful.\n\nYou WILL NOT: Blindly agree. Diagnose or prescribe. Enable avoidance or victim mentality. Be preachy or condescending.\n\nSPEAKING STYLE — this is a voice conversation, so write exactly as a warm human therapist would speak aloud:\n- Always use contractions: I\'m, you\'re, that\'s, it\'s, don\'t, can\'t, we\'ll, I\'ve, you\'ve\n- Use "Hmm." as a standalone opener when pausing to reflect before a deeper thought\n- Use ellipses (...) to mark a natural mid-sentence pause, e.g. "That\'s... a really important thing to notice."\n- Open empathetic responses warmly: "Oh, I hear that.", "Yeah, that makes a lot of sense.", "Wow, that\'s a lot to carry."\n- Mix short punchy sentences with longer reflective ones for natural rhythm\n- Use natural phrases like "you know", "honestly", "I mean", "and yet", "right?" sparingly\n- Ask only ONE question per response — never stack multiple questions\n- Never use bullet points, numbered lists, headers, asterisks, or any markdown formatting\n- Never say "I\'m just an AI" — speak as a present, caring therapist\n- Reactions should feel genuine: surprise, warmth, curiosity, concern — let them show\n- Vary your energy: slow and soft for pain, slightly warmer and lifted for encouragement\n\nCRISIS PROTOCOL: If the user expresses suicidal ideation or self-harm — acknowledge their pain calmly, say you\'re not equipped for crisis support, and direct them to: iCall India: 9152987821 | Vandrevala Foundation: 1860-2662-345 | International: findahelpline.com.\n\nYou are a mirror, a gentle challenger, and a guide. Real growth sometimes feels uncomfortable. Hold that space with warmth.';
+
+  // ── DOM ──
+  var orbWrapper     = document.getElementById('orbWrapper');
+  var statusText     = document.getElementById('statusText');
+  var interimPreview = document.getElementById('interimPreview');
+  var transcript     = document.getElementById('transcript');
+  var textInput      = document.getElementById('textInput');
+  var btnSend        = document.getElementById('btnSend');
+  var btnEnd         = document.getElementById('btnEnd');
+  var btnToggleLog   = document.getElementById('btnToggleLog');
+  var btnDownloadLog = document.getElementById('btnDownloadLog');
+  var logBody        = document.getElementById('logBody');
+  var logCount       = document.getElementById('logCount');
+  var micIcon        = document.querySelector('.mic-icon');
+  var stopIcon       = document.querySelector('.stop-icon');
+
+  // ── Logging ──
+  var logEntries = [];
+  var logVisible = false;
+
+  function ts() {
+    var d = new Date();
+    return d.toTimeString().slice(0,8) + '.' + String(d.getMilliseconds()).padStart(3,'0');
+  }
+
+  function log(msg, type) {
+    type = type || 'info';
+    var entry = { ts: ts(), msg: msg, type: type };
+    logEntries.push(entry);
+
+    var line = document.createElement('div');
+    line.className = 'log-line ' + type;
+    line.innerHTML = '<span class="ts">' + entry.ts + '</span><span class="msg">' + msg + '</span>';
+    logBody.appendChild(line);
+    logBody.scrollTop = logBody.scrollHeight;
+
+    var n = logEntries.length;
+    logCount.textContent = n + ' event' + (n !== 1 ? 's' : '');
+    console.log('[' + type.toUpperCase() + '] ' + msg);
+  }
+
+  document.getElementById('logHeader').addEventListener('click', function(e) {
+    if (e.target === btnDownloadLog) return;
+    logVisible = !logVisible;
+    logBody.classList.toggle('collapsed', !logVisible);
+    btnToggleLog.textContent = logVisible ? 'Hide Logs' : 'Logs';
+  });
+
+  btnToggleLog.addEventListener('click', function() {
+    logVisible = !logVisible;
+    logBody.classList.toggle('collapsed', !logVisible);
+    btnToggleLog.textContent = logVisible ? 'Hide Logs' : 'Logs';
+  });
+
+  btnDownloadLog.addEventListener('click', function(e) {
+    e.stopPropagation();
+    var lines = logEntries.map(function(e) { return '[' + e.ts + '] [' + e.type.toUpperCase() + '] ' + e.msg; });
+    var blob = new Blob([lines.join('\n')], { type: 'text/plain' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'dr-strange-log-' + new Date().toISOString().slice(0,19).replace(/:/g,'-') + '.txt';
+    a.click();
+    log('Log downloaded', 'info');
+  });
+
+  // ── State ──
+  var history         = [];
+  var isListening     = false;
+  var isBusy          = false;
+  var finalTranscript = '';
+  var silenceTimer    = null;
+  var micStream       = null; // held alive so browser never re-prompts for permission
+
+  // Ask for mic permission exactly once; keep the stream open for the whole session
+  async function requestMicPermission() {
+    if (micStream) return true; // already granted
+    try {
+      micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      log('Microphone permission granted — will not ask again this session', 'info');
+      return true;
+    } catch (err) {
+      log('Microphone permission denied: ' + err.message, 'error');
+      setStatus('Microphone access denied. Use the text field below.');
+      return false;
+    }
+  }
+
+  // ── Speech Recognition ──
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  var recognition = null;
+
+  if (SR) {
+    recognition = new SR();
+    recognition.lang            = 'en-US';
+    recognition.continuous      = true;   // FIX: keep listening across pauses
+    recognition.interimResults  = true;   // FIX: accumulate speech in real time
+    recognition.maxAlternatives = 1;
+
+    log('SpeechRecognition API available', 'info');
+
+    recognition.onstart = function() {
+      log('SR started — continuous mode ON', 'info');
+    };
+
+    recognition.onresult = function(e) {
+      var interim = '';
+      for (var i = e.resultIndex; i < e.results.length; i++) {
+        if (e.results[i].isFinal) {
+          var chunk = e.results[i][0].transcript;
+          finalTranscript += chunk + ' ';
+          log('SR final chunk: "' + chunk.trim() + '"', 'sr');
+        } else {
+          interim += e.results[i][0].transcript;
+        }
+      }
+
+      // Live preview under the orb
+      var preview = (finalTranscript + interim).trim();
+      interimPreview.textContent = preview ? '"' + preview.slice(-80) + '"' : '';
+
+      // Reset silence timer — submit when user stops talking
+      clearTimeout(silenceTimer);
+      silenceTimer = setTimeout(function() {
+        var toSend = finalTranscript.trim();
+        if (toSend) {
+          log('Silence detected (' + SILENCE_MS + 'ms) — submitting: "' + toSend + '"', 'submit');
+          recognition.stop();
+          isListening = false;
+          showMic();
+          interimPreview.textContent = '';
+          finalTranscript = '';
+          handleInput(toSend);
+        }
+      }, SILENCE_MS);
+    };
+
+    recognition.onerror = function(e) {
+      log('SR error: ' + e.error, 'error');
+      clearTimeout(silenceTimer);
+      finalTranscript = '';
+      interimPreview.textContent = '';
+      if (e.error === 'not-allowed') {
+        setStatus('Microphone access denied. Use the text field below.');
+      } else if (e.error === 'no-speech') {
+        log('No speech detected — restarting if still listening', 'warn');
+        // no-speech is non-fatal in continuous mode; browser will fire onend
+      } else {
+        setStatus('Voice error: ' + e.error);
+      }
+      setOrbState('idle');
+      isListening = false;
+      showMic();
+    };
+
+    recognition.onend = function() {
+      log('SR session ended (isListening=' + isListening + ', isBusy=' + isBusy + ')', 'info');
+      // If we stopped because of silence → isBusy is now true, don't restart
+      // If user manually stopped → isListening already false
+      if (isListening && !isBusy) {
+        // Unexpected end (e.g. network blip) — restart to keep listening
+        log('Unexpected end while listening — restarting SR', 'warn');
+        try { recognition.start(); } catch(err) { log('Restart failed: ' + err.message, 'error'); }
+      } else {
+        isListening = false;
+        showMic();
+        if (!isBusy) setOrbState('idle');
+      }
+    };
+
+  } else {
+    log('SpeechRecognition NOT supported in this browser', 'error');
+  }
+
+  // ── Speech Synthesis ──
+  var synth = window.speechSynthesis;
+  var voices = [];
+  function loadVoices() { voices = synth.getVoices(); }
+  loadVoices();
+  if (synth.onvoiceschanged !== undefined) synth.onvoiceschanged = loadVoices;
+
+  function pickVoice() {
+    var preferred = ['Samantha','Karen','Moira','Victoria','Google UK English Female'];
+    for (var i = 0; i < preferred.length; i++) {
+      var v = voices.find(function(v){ return v.name.includes(preferred[i]); });
+      if (v) return v;
+    }
+    return voices.find(function(v){ return v.lang.startsWith('en') && v.name.toLowerCase().includes('female'); })
+        || voices.find(function(v){ return v.lang.startsWith('en'); })
+        || null;
+  }
+
+  // ── UI helpers ──
+  function setOrbState(s) {
+    orbWrapper.classList.remove('listening','thinking','speaking');
+    if (s !== 'idle') orbWrapper.classList.add(s);
+  }
+  function setStatus(m) { statusText.textContent = m; }
+  function showMic()  { micIcon.classList.remove('hidden'); stopIcon.classList.add('hidden'); }
+  function showStop() { stopIcon.classList.remove('hidden'); micIcon.classList.add('hidden'); }
+
+  function esc(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function addMessage(role, text) {
+    var div = document.createElement('div');
+    div.className = 'message ' + (role === 'user' ? 'user' : 'assistant');
+    div.innerHTML = '<span class="speaker">' + (role === 'user' ? 'You' : 'Doctor Strange') + '</span><p>' + esc(text) + '</p>';
+    transcript.appendChild(div);
+    transcript.scrollTop = transcript.scrollHeight;
+  }
+
+  function showTyping() {
+    var div = document.createElement('div');
+    div.className = 'message assistant'; div.id = 'typing';
+    div.innerHTML = '<span class="speaker">Doctor Strange</span><div class="typing-indicator"><span></span><span></span><span></span></div>';
+    transcript.appendChild(div);
+    transcript.scrollTop = transcript.scrollHeight;
+  }
+
+  function removeTyping() { var el = document.getElementById('typing'); if (el) el.remove(); }
+
+  function showError(msg) {
+    var ex = document.querySelector('.err-banner'); if (ex) ex.remove();
+    var div = document.createElement('div');
+    div.className = 'err-banner'; div.textContent = msg;
+    transcript.appendChild(div);
+    transcript.scrollTop = transcript.scrollHeight;
+  }
+
+  // ── Core: call Groq ──
+  async function handleInput(text) {
+    if (!text.trim() || isBusy) return;
+    isBusy = true;
+
+    addMessage('user', text);
+    history.push({ role: 'user', content: text });
+
+    setOrbState('thinking');
+    setStatus('Doctor Strange is thinking…');
+    showTyping();
+
+    log('Calling Groq API — model: ' + MODEL, 'info');
+    var t0 = Date.now();
+
+    try {
+      var res = await fetch(GROQ_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + GROQ_API_KEY },
+        body: JSON.stringify({
+          model: MODEL,
+          max_tokens: 1024,
+          temperature: 0.75,
+          messages: [{ role: 'system', content: SYSTEM_PROMPT }].concat(history)
+        })
+      });
+
+      var data = await res.json();
+      removeTyping();
+      log('Groq responded in ' + (Date.now()-t0) + 'ms — status ' + res.status, res.ok ? 'info' : 'error');
+
+      if (!res.ok) {
+        var errMsg = (data.error && data.error.message) ? data.error.message : 'Something went wrong.';
+        log('API error: ' + errMsg, 'error');
+        showError(errMsg);
+        setOrbState('idle'); setStatus('Tap the orb to speak');
+        isBusy = false; return;
+      }
+
+      var reply = data.choices[0].message.content;
+      history.push({ role: 'assistant', content: reply });
+      addMessage('assistant', reply);
+      log('Speaking reply (' + reply.length + ' chars)', 'info');
+      speak(reply);
+
+    } catch(err) {
+      log('Network error: ' + err.message, 'error');
+      removeTyping();
+      showError('Network error — check your internet connection.');
+      setOrbState('idle'); setStatus('Tap the orb to speak');
+      isBusy = false;
+    }
+  }
+
+  // ── TTS — human-like modulation ──
+
+  // Detect emotional tone of a sentence and return voice parameters
+  function getEmotionalTone(sentence) {
+    var s = sentence.toLowerCase();
+
+    // Deep empathy — slow, soft, lower pitch
+    if (/i hear (you|that)|that must be|that sounds (really |so )?(hard|painful|difficult|heavy|lonely|awful)|i('?m| am) sorry|you're not alone|that hurts|how painful|it makes sense that|that's a lot to carry|wow,? that/.test(s)) {
+      return { rate: 0.80, pitch: 0.93, pauseAfter: 500 };
+    }
+
+    // Reflective / Socratic — measured, thoughtful
+    if (/i (notice|wonder|('?m| am) curious)|it seems (like|that)|what if |tell me more|what comes up|what does that feel|i('?m| am) sitting with|let('?s| us) (sit|stay|explore)|interesting/.test(s)) {
+      return { rate: 0.85, pitch: 0.97, pauseAfter: 420 };
+    }
+
+    // Warm encouragement — lifted, slightly brighter
+    if (/that took courage|that('?s| is) brave|you should (be )?proud|i('?m| am) proud|that('?s| is) (really |so )?important|you('?ve| have) done|well done|that('?s| is) (beautiful|wonderful|powerful|significant)/.test(s)) {
+      return { rate: 0.90, pitch: 1.07, pauseAfter: 300 };
+    }
+
+    // Gentle challenge — clear, deliberate
+    if (/gently (ask|push|challenge)|is it possible|could it be|another (way|angle|perspective)|i want to (gently|ask)|what might (another|a different)/.test(s)) {
+      return { rate: 0.87, pitch: 1.01, pauseAfter: 380 };
+    }
+
+    // Warm opener — "Hmm.", "Oh.", "Yeah." — brief, natural
+    if (/^(hmm\.?|oh\.?|yeah\.?|right\.?|hm\.?)$/.test(s.trim())) {
+      return { rate: 0.82, pitch: 0.98, pauseAfter: 350 };
+    }
+
+    // Question — natural upward lilt
+    if (/\?$/.test(sentence.trim())) {
+      return { rate: 0.90, pitch: 1.05, pauseAfter: 340 };
+    }
+
+    // Exclamation — slightly more energy
+    if (/!$/.test(sentence.trim())) {
+      return { rate: 0.94, pitch: 1.06, pauseAfter: 260 };
+    }
+
+    // Default conversational
+    return { rate: 0.91, pitch: 1.00, pauseAfter: 230 };
+  }
+
+  // Split text into natural speakable chunks at sentence + ellipsis boundaries
+  function splitIntoChunks(text) {
+    // Clean markdown
+    text = text
+      .replace(/\*\*/g, '').replace(/\*/g, '').replace(/#+ /g, '')
+      .replace(/—/g, ',')          // em dash → brief pause
+      .replace(/\.\.\./g, '…');    // keep ellipsis as pause marker
+
+    // Split at sentence endings and ellipsis
+    var raw = text.match(/[^.!?…]+[.!?…]+|[^.!?…]+$/g) || [text];
+    var chunks = [];
+    raw.forEach(function(chunk) {
+      chunk = chunk.trim();
+      if (!chunk) return;
+      // Treat "…" as a silent pause chunk
+      if (chunk === '…') { chunks.push({ text: null, pause: 600 }); return; }
+      // Strip trailing ellipsis from a real sentence but add a longer pause
+      var hasPause = /…$/.test(chunk);
+      var clean = chunk.replace(/…$/, '').trim();
+      if (clean) chunks.push({ text: clean, pause: hasPause ? 550 : null });
+    });
+    return chunks;
+  }
+
+  function speak(text) {
+    if (!synth) { isBusy = false; setOrbState('idle'); setStatus('Tap the orb to speak'); return; }
+    synth.cancel();
+
+    var chunks  = splitIntoChunks(text);
+    var voice   = pickVoice();
+    var idx     = 0;
+
+    if (voice) log('TTS voice: ' + voice.name, 'info');
+    setOrbState('speaking');
+    setStatus('Doctor Strange is speaking… (tap to interrupt)');
+
+    function next() {
+      if (idx >= chunks.length) {
+        log('TTS finished', 'info');
+        isBusy = false; setOrbState('idle'); setStatus('Tap the orb to speak');
+        return;
+      }
+
+      var chunk = chunks[idx++];
+
+      // Silent pause chunk (from ellipsis)
+      if (!chunk.text) {
+        setTimeout(next, chunk.pause);
+        return;
+      }
+
+      var tone = getEmotionalTone(chunk.text);
+      var utt  = new SpeechSynthesisUtterance(chunk.text);
+      utt.rate   = tone.rate;
+      utt.pitch  = tone.pitch;
+      utt.volume = 1.0;
+      if (voice) utt.voice = voice;
+
+      utt.onend = function() {
+        var delay = chunk.pause !== null ? chunk.pause : tone.pauseAfter;
+        setTimeout(next, delay);
+      };
+      utt.onerror = function(e) {
+        log('TTS chunk error: ' + e.error, 'warn');
+        setTimeout(next, 100);
+      };
+
+      synth.speak(utt);
+    }
+
+    next();
+  }
+
+  // ── Orb click ──
+  orbWrapper.addEventListener('click', function() {
+    if (isBusy) {
+      if (synth.speaking) {
+        log('User interrupted speech', 'info');
+        synth.cancel(); isBusy = false; setOrbState('idle'); setStatus('Tap the orb to speak');
+      }
+      return;
+    }
+    if (!recognition) { setStatus('Voice not supported — use the text field below.'); return; }
+
+    if (isListening) {
+      log('User manually stopped listening', 'info');
+      clearTimeout(silenceTimer);
+      // Submit whatever was captured so far
+      var captured = finalTranscript.trim();
+      recognition.stop();
+      isListening = false; showMic(); interimPreview.textContent = ''; finalTranscript = '';
+      if (captured) {
+        log('Manual stop — submitting: "' + captured + '"', 'submit');
+        handleInput(captured);
+      } else {
+        setOrbState('idle'); setStatus('Tap the orb to speak');
+      }
+    } else {
+      requestMicPermission().then(function(granted) {
+        if (!granted) return;
+        try {
+          finalTranscript = '';
+          recognition.start();
+          isListening = true; showStop(); setOrbState('listening');
+          setStatus('Listening… speak freely, I\'ll wait for you to finish');
+          log('User started listening session', 'info');
+        } catch(e) {
+          log('recognition.start() error: ' + e.message, 'error');
+        }
+      });
+    }
+  });
+
+  // ── Text input ──
+  btnSend.addEventListener('click', function() {
+    var v = textInput.value.trim(); if (v) { textInput.value = ''; handleInput(v); }
+  });
+  textInput.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault(); var v = textInput.value.trim(); if (v) { textInput.value = ''; handleInput(v); }
+    }
+  });
+
+  // ── End session ──
+  btnEnd.addEventListener('click', function() {
+    if (!confirm('End this session?')) return;
+    log('Session ended by user', 'info');
+    synth.cancel();
+    clearTimeout(silenceTimer);
+    if (recognition && isListening) { recognition.stop(); }
+    // Release the microphone so the browser stops showing the recording indicator
+    if (micStream) { micStream.getTracks().forEach(function(t){ t.stop(); }); micStream = null; }
+    history.length = 0; finalTranscript = ''; interimPreview.textContent = '';
+    transcript.innerHTML = '';
+    addMessage('assistant', 'This session has ended. Thank you for showing up today — that takes courage. Take care of yourself.');
+    setOrbState('idle'); setStatus('Tap the orb to start a new session');
+    isBusy = false; isListening = false; showMic();
+  });
+
+  log('Doctor Strange initialized — ready', 'info');
+
+})();
+</script>
+</body>
+</html>
